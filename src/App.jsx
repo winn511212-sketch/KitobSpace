@@ -1,289 +1,585 @@
-import { useEffect, useRef, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const dayToday = (new Date().getDay() + 6) % 7;
-const days = ["Du", "Se", "Cho", "Pa", "Ju", "Sha", "Ya"];
-
-const initialTasks = [
-  { id: 1, title: "Portfolio dizaynini yakunlash", project: "Portfolio", time: "09:30", done: false, day: dayToday },
-  { id: 2, title: "Ingliz tilidan 20 ta so‘z o‘rganish", project: "O‘qish", time: "11:00", done: true, day: dayToday },
-  { id: 3, title: "Haftalik rejani ko‘rib chiqish", project: "Shaxsiy", time: "14:00", done: false, day: dayToday },
+const starterBooks = [
+  {
+    id: 1,
+    title: "Dune",
+    author: "Frank Herbert",
+    category: "Badiiy",
+    year: 1965,
+    rating: "4.9",
+    description: "Arrakis sahrosidagi sarguzashtlar va insoniyat kelajagi haqida.",
+    text: "",
+    cover: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=700&q=85",
+    color: "violet",
+  },
+  {
+    id: 2,
+    title: "Cosmos",
+    author: "Carl Sagan",
+    category: "Ilm-fan",
+    year: 1980,
+    rating: "4.8",
+    description: "Koinot va insoniyatning ilmiy izlanishlari haqida.",
+    text: "",
+    cover: "https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=700&q=85",
+    color: "blue",
+  },
+  {
+    id: 3,
+    title: "Sapiens",
+    author: "Yuval Noah Harari",
+    category: "Tarix",
+    year: 2011,
+    rating: "4.9",
+    description: "Insoniyat tarixining qadimgi davrlardan bugungacha bo‘lgan hikoyasi.",
+    text: "",
+    cover: "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=700&q=85",
+    color: "orange",
+  },
+  {
+    id: 4,
+    title: "Clean Code",
+    author: "Robert C. Martin",
+    category: "Texnologiya",
+    year: 2008,
+    rating: "4.7",
+    description: "Tartibli va o‘qilishi oson dasturiy kod yozish haqida.",
+    text: "",
+    cover: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=700&q=85",
+    color: "green",
+  },
 ];
 
-function readTasks() {
+const categories = [
+  "Barchasi",
+  "Badiiy",
+  "Ilm-fan",
+  "Tarix",
+  "Texnologiya",
+  "Ta’lim",
+];
+
+function readJSON(key, fallback) {
   try {
-    const saved = JSON.parse(localStorage.getItem("rejaflow-tasks"));
-    if (!Array.isArray(saved)) return initialTasks;
-    return saved.map((task) => ({ ...task, day: task.day ?? dayToday }));
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
   } catch {
-    return initialTasks;
+    return fallback;
   }
 }
 
-export default function App() {
-  const [tasks, setTasks] = useState(readTasks);
-  const [habits, setHabits] = useState([
-    { id: 1, name: "Ertalabki badantarbiya", icon: "🏃", done: true },
-    { id: 2, name: "20 daqiqa kitob o‘qish", icon: "📖", done: false },
-    { id: 3, name: "Kunlik reja tuzish", icon: "✍️", done: false },
-  ]);
-  const [projects, setProjects] = useState(["Portfolio", "O‘qish", "Shaxsiy"]);
-  const [text, setText] = useState("");
-  const [selectedDay, setSelectedDay] = useState(dayToday);
-  const [active, setActive] = useState("Umumiy ko‘rinish");
-  const [toast, setToast] = useState("");
+function loadBooks() {
+  return [...starterBooks, ...readJSON("neon-library-added-books", [])];
+}
 
-  const overviewRef = useRef(null);
-  const tasksRef = useRef(null);
-  const projectsRef = useRef(null);
-  const habitsRef = useRef(null);
+export default function App() {
+  const [user, setUser] = useState(() => readJSON("neon-library-user", null));
+  const [accounts, setAccounts] = useState(() =>
+    readJSON("neon-library-accounts", []),
+  );
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState("login");
+  const [authError, setAuthError] = useState("");
+
+  const [allBooks, setAllBooks] = useState(loadBooks);
+  const [favorites, setFavorites] = useState(() =>
+    user ? readJSON(`neon-library-favorites-${user.username}`, []) : [],
+  );
+  const [page, setPage] = useState("dashboard");
+  const [category, setCategory] = useState("Barchasi");
+  const [query, setQuery] = useState("");
+  const [readingBook, setReadingBook] = useState(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [likedBook, setLikedBook] = useState(null);
+  const [newBook, setNewBook] = useState({
+    title: "",
+    author: "",
+    category: "Badiiy",
+    description: "",
+    text: "",
+    cover: "",
+  });
+
+  // Demo loyihada admin menyusi barcha hisoblarda ko‘rinadi.
+  const isAdmin = true;
 
   useEffect(() => {
-    localStorage.setItem("rejaflow-tasks", JSON.stringify(tasks));
-  }, [tasks]);
+    localStorage.setItem("neon-library-accounts", JSON.stringify(accounts));
+  }, [accounts]);
 
-  function notify(message) {
-    setToast(message);
-    window.clearTimeout(window.rejaFlowToast);
-    window.rejaFlowToast = window.setTimeout(() => setToast(""), 2200);
-  }
+  useEffect(() => {
+    localStorage.setItem(
+      "neon-library-added-books",
+      JSON.stringify(allBooks.filter((book) => book.custom)),
+    );
+  }, [allBooks]);
 
-  function navigate(name, ref) {
-    setActive(name);
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(
+        `neon-library-favorites-${user.username}`,
+        JSON.stringify(favorites),
+      );
+    }
+  }, [favorites, user]);
 
-  function addTask(event) {
+  function handleAuth(event) {
     event.preventDefault();
-    const title = text.trim();
-    if (!title) return;
+    setAuthError("");
 
-    setTasks((current) => [
-      ...current,
-      { id: Date.now(), title, project: "Shaxsiy", time: "Bugun", done: false, day: selectedDay },
-    ]);
-    setText("");
-    notify("Vazifa qo‘shildi!");
-  }
+    const name = username.trim();
 
-  function toggleTask(id) {
-    setTasks((current) =>
-      current.map((task) => task.id === id ? { ...task, done: !task.done } : task)
+    if (name.length < 3) {
+      setAuthError("Username kamida 3 ta belgidan iborat bo‘lsin.");
+      return;
+    }
+
+    if (password.length < 4) {
+      setAuthError("Parol kamida 4 ta belgidan iborat bo‘lsin.");
+      return;
+    }
+
+    if (authMode === "signup") {
+      const exists = accounts.some(
+        (account) => account.username.toLowerCase() === name.toLowerCase(),
+      );
+
+      if (exists) {
+        setAuthError("Bu username band. Log in qilib ko‘ring.");
+        return;
+      }
+
+      const nextAccounts = [...accounts, { username: name, password }];
+      const nextUser = { username: name };
+
+      setAccounts(nextAccounts);
+      setUser(nextUser);
+      setFavorites([]);
+      localStorage.setItem("neon-library-user", JSON.stringify(nextUser));
+      return;
+    }
+
+    const account = accounts.find(
+      (item) =>
+        item.username.toLowerCase() === name.toLowerCase() &&
+        item.password === password,
+    );
+
+    if (!account) {
+      setAuthError("Username yoki parol noto‘g‘ri.");
+      return;
+    }
+
+    const nextUser = { username: account.username };
+    setUser(nextUser);
+    localStorage.setItem("neon-library-user", JSON.stringify(nextUser));
+    setFavorites(
+      readJSON(`neon-library-favorites-${account.username}`, []),
     );
   }
 
-  function removeTask(id) {
-    setTasks((current) => current.filter((task) => task.id !== id));
-    notify("Vazifa o‘chirildi");
+  function logout() {
+    speechSynthesis.cancel();
+    localStorage.removeItem("neon-library-user");
+    setUser(null);
+    setUsername("");
+    setPassword("");
+    setPage("dashboard");
   }
 
-  function toggleHabit(id) {
-    setHabits((current) =>
-      current.map((habit) => habit.id === id ? { ...habit, done: !habit.done } : habit)
+  function toggleFavorite(id) {
+    setFavorites((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+    setLikedBook(id);
+    window.setTimeout(() => setLikedBook(null), 450);
+  }
+
+  function addBook(event) {
+    event.preventDefault();
+
+    const book = {
+      ...newBook,
+      id: Date.now(),
+      year: new Date().getFullYear(),
+      rating: "Yangi",
+      color: "violet",
+      custom: true,
+      cover:
+        newBook.cover ||
+        "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=700&q=85",
+    };
+
+    setAllBooks((current) => [...current, book]);
+    setNewBook({
+      title: "",
+      author: "",
+      category: "Badiiy",
+      description: "",
+      text: "",
+      cover: "",
+    });
+    setAdminOpen(false);
+    setPage("dashboard");
+    setCategory("Barchasi");
+  }
+
+  function startListening() {
+    if (!readingBook?.text) {
+      alert("Bu kitobda o‘qiladigan matn yo‘q. Admin panelidan matn qo‘shing.");
+      return;
+    }
+
+    if (!("speechSynthesis" in window)) {
+      alert("Brauzeringiz ovoz chiqarib o‘qishni qo‘llamaydi.");
+      return;
+    }
+
+    speechSynthesis.cancel();
+    const speech = new SpeechSynthesisUtterance(readingBook.text);
+    speech.lang = "uz-UZ";
+    speechSynthesis.speak(speech);
+  }
+
+  const visibleBooks = useMemo(() => {
+    const search = query.trim().toLowerCase();
+
+    return allBooks.filter((book) => {
+      const matchesPage = page !== "favorites" || favorites.includes(book.id);
+      const matchesCategory =
+        category === "Barchasi" || book.category === category;
+      const matchesSearch =
+        !search ||
+        book.title.toLowerCase().includes(search) ||
+        book.author.toLowerCase().includes(search);
+
+      return matchesPage && matchesCategory && matchesSearch;
+    });
+  }, [allBooks, page, favorites, category, query]);
+
+  if (!user) {
+    return (
+      <div className="auth-page">
+        <form className="auth-card" onSubmit={handleAuth}>
+          <div className="brand auth-brand">
+            <span className="brand-icon">✳</span>
+            <span>kitob<span className="brand-light">.space</span></span>
+          </div>
+
+          <div className="eyebrow"><span /> RAQAMLI KUTUBXONANGIZ</div>
+          <h1>{authMode === "login" ? "Xush kelibsiz" : "Hisob yarating"}</h1>
+          <p className="auth-subtitle">
+            {authMode === "login"
+              ? "Hisobingizga kirish uchun ma’lumotlarni kiriting."
+              : "Username va parol tanlab ro‘yxatdan o‘ting."}
+          </p>
+
+          <label className="auth-label">
+            Username
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="Masalan: fayoz"
+              autoComplete="username"
+            />
+          </label>
+
+          <label className="auth-label">
+            Parol
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Parolingiz"
+              autoComplete={authMode === "login" ? "current-password" : "new-password"}
+            />
+          </label>
+
+          {authError && <div className="auth-error">{authError}</div>}
+
+          <button className="auth-submit" type="submit">
+            {authMode === "login" ? "Log in →" : "Sign up →"}
+          </button>
+
+          <div className="auth-switch">
+            {authMode === "login" ? "Hisobingiz yo‘qmi?" : "Hisobingiz bormi?"}
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode(authMode === "login" ? "signup" : "login");
+                setAuthError("");
+              }}
+            >
+              {authMode === "login" ? "Sign up" : "Log in"}
+            </button>
+          </div>
+        </form>
+      </div>
     );
   }
-
-  function addProject() {
-    const name = window.prompt("Yangi loyiha nomi:");
-    if (!name?.trim()) return;
-    setProjects((current) => [...current, name.trim()]);
-    notify("Loyiha qo‘shildi!");
-  }
-
-  function removeProject(name) {
-    setProjects((current) => current.filter((project) => project !== name));
-    notify("Loyiha o‘chirildi");
-  }
-
-  const doneCount = tasks.filter((task) => task.done).length;
-  const visibleTasks = tasks.filter((task) => task.day === selectedDay);
-  const dateText = new Intl.DateTimeFormat("uz-UZ", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).format(new Date());
-
-  const menu = [
-    ["◫", "Umumiy ko‘rinish", overviewRef],
-    ["☑️", "Vazifalar", tasksRef],
-    ["▦", "Loyihalar", projectsRef],
-    ["◷", "Odatlar", habitsRef],
-  ];
 
   return (
-    <div className="app">
+    <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#top" onClick={(e) => { e.preventDefault(); navigate(menu[0][1], overviewRef); }}>
-          <span className="brand-mark">r</span>
-          <span>RejaFlow<span className="brand-dot">.</span></span>
-        </a>
-
-
-        <div className="workspace">
-          <span className="workspace-icon">✦</span>
-          <span><b>Shaxsiy makon</b><small>Boshqaruv paneli</small></span>
-          <span className="workspace-arrow">⌄</span>
+        <div className="brand">
+          <span className="brand-icon">✳</span>
+          <span>kitob<span className="brand-light">.space</span></span>
         </div>
 
-        <p className="side-label">ISH MAYDONI</p>
-        <nav className="navigation">
-          {menu.map(([icon, name, ref]) => (
+        <div className="side-label">MENYU</div>
+        <nav className="side-nav">
+          <button
+            className={`nav-item ${page === "dashboard" ? "active" : ""}`}
+            onClick={() => {
+              setPage("dashboard");
+              setCategory("Barchasi");
+            }}
+          >
+            <span>⌂</span> Bosh sahifa
+          </button>
+
+          <button
+            className={`nav-item ${page === "favorites" ? "active" : ""}`}
+            onClick={() => {
+              setPage("favorites");
+              setCategory("Barchasi");
+            }}
+          >
+            <span>♡</span> Sevimlilar
+            <span className="nav-count">{favorites.length}</span>
+          </button>
+
+          <button className="nav-item" onClick={() => setAdminOpen(true)}>
+            <span>＋</span> Admin: kitob qo‘shish
+          </button>
+        </nav>
+
+        <div className="side-label category-label">KATEGORIYALAR</div>
+        <nav className="side-nav">
+          {categories.slice(1).map((item) => (
             <button
-              key={name}
-              className={`nav-item ${active === name ? "active" : ""}`}
-              onClick={() => navigate(name, ref)}
+              className={`nav-item ${category === item ? "active" : ""}`}
+              key={item}
+              onClick={() => {
+                setPage("dashboard");
+                setCategory(item);
+              }}
             >
-              <span className="nav-icon">{icon}</span>
-              {name}
-              {name === "Vazifalar" && <span className="nav-count">{tasks.length}</span>}
+              <span className="category-dot" /> {item}
             </button>
           ))}
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="tip-card">
-            <span className="tip-star">✳️</span>
-            <b>Kichik qadamlar,<br />katta natijalar.</b>
-            <p>Bugun maqsading sari bir qadam tashla.</p>
+          <div className="profile-avatar">{user.username[0].toUpperCase()}</div>
+          <div className="profile-info">
+            <strong>{user.username}</strong>
+            <span>Kitobxon / Admin demo</span>
           </div>
-          <div className="profile">
-            <span className="avatar">A</span>
-            <span><b>Azizbek</b><small>Shaxsiy hisob</small></span>
-          </div>
+          <button className="logout-button" onClick={logout}>Chiqish</button>
         </div>
       </aside>
 
-      <main className="main">
+      <main className="main-area">
         <header className="topbar">
-          <div>Ish maydoni <span>/</span> <b>{active}</b></div>
-          <button className="user-avatar" onClick={() => notify("Profil: Azizbek")} aria-label="Profil">A</button>
+          <div className="breadcrumb">
+            Kutubxona <span>/</span>
+            {page === "favorites" ? "Sevimlilar" : "Bosh sahifa"}
+          </div>
+          <div className="topbar-right">
+            <span className="online-status"><i /> O‘qishga tayyormisiz?</span>
+            <div className="top-avatar">{user.username[0].toUpperCase()}</div>
+          </div>
         </header>
 
-        <div className="content" ref={overviewRef}>
-          <section className="welcome">
-            <div>
-              <div className="date-label">{dateText}</div>
-              <h1>Xayrli kun, Azizbek <span>✦</span></h1>
-              <p>Rejalaringni tartibga sol, maqsadlaringga yaqinlash.</p>
+        <section className="content">
+          <div className="hero">
+            <div className="hero-copy">
+              <div className="eyebrow"><span /> SIZNING RAQAMLI KUTUBXONANGIZ</div>
+              <h1>Yangi olamlar<br /><span>bir sahifa narida.</span></h1>
+              <p>Kitobni tanlang, brauzerda o‘qing yoki ovoz chiqarib tinglang.</p>
             </div>
-            <button className="primary-button" onClick={() => navigate("Vazifalar", tasksRef)}>
-              ＋ Yangi vazifa
-            </button>
-          </section>
-
-          <section className="stats">
-            <article className="card stat-card">
-              <span className="stat-icon purple">◈</span>
-              <p>Bajarilgan vazifalar</p>
-              <strong>{doneCount}<small> / {tasks.length}</small></strong>
-              <div className="progress"><span style={{ width: `${tasks.length ? doneCount / tasks.length * 100 : 0}%` }} /></div>
-            </article>
-            <article className="card stat-card">
-              <span className="stat-icon orange">♨️</span>
-              <p>Faollik zanjiri</p><strong>5<small> kun</small></strong>
-              <div className="stat-note">Ajoyib ritmda ketyapsan!</div>
-            </article>
-            <article className="card stat-card">
-              <span className="stat-icon green">◷</span>
-              <p>Fokus vaqti</p><strong>3.5<small> soat</small></strong>
-              <div className="stat-note">Haftalik maqsad: 20 soat</div>
-            </article>
-            <article className="card quote-card">
-              <span className="quote-mark">“</span>
-              <p>Intizom — maqsadlar va natijalar orasidagi ko‘prik.</p>
-              <small>— Jim Ron</small>
-            </article>
-          </section>
-
-          <section className="dashboard">
-            <article className="card panel" ref={tasksRef}>
-              <div className="panel-heading">
-                <div><h2>Vazifalar</h2><p>Tanlangan kun uchun vazifalar</p></div>
-                <span className="muted">{visibleTasks.length} ta</span>
-              </div>
-
-              <form className="task-form" onSubmit={addTask}>
-                <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Yangi vazifa yoz..." />
-                <button type="submit">Qo‘shish</button>
-              </form>
-
-
-              {visibleTasks.length ? visibleTasks.map((task) => (
-                <div className={`task-row ${task.done ? "is-done" : ""}`} key={task.id}>
-                  <input type="checkbox" checked={task.done} onChange={() => toggleTask(task.id)} />
-                  <div className="task-copy"><b>{task.title}</b><small>{task.project}</small></div>
-                  <span className="task-time">{task.time}</span>
-                  <button className="delete-task" onClick={() => removeTask(task.id)} aria-label="O‘chirish">×</button>
+            <div className="hero-art" aria-hidden="true">
+              <div className="orbit orbit-one" />
+              <div className="orbit orbit-two" />
+              <div className="hero-book">
+                <div className="book-spine" />
+                <div className="book-cover">
+                  <span className="cover-star">✳</span>
+                  <span className="cover-title">READ<br />BEYOND</span>
+                  <span className="cover-caption">THE ORDINARY</span>
                 </div>
-              )) : <p className="empty-state">Bu kunda vazifa yo‘q. Yangi vazifa qo‘sh!</p>}
-            </article>
-
-            <article className="card panel">
-              <div className="panel-heading">
-                <div><h2>Haftalik reja</h2><p>Kun tanlash uchun bosing</p></div>
-                <span className="muted">Shu hafta</span>
               </div>
-              <div className="week">
-                {days.map((day, index) => (
+              <span className="sparkle sparkle-one">✦</span>
+              <span className="sparkle sparkle-two">✧</span>
+            </div>
+          </div>
+
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow muted">
+                {page === "favorites" ? "SAQLANGAN KITOBLAR" : "MUTOLAA UCHUN"}
+              </div>
+              <h2>{page === "favorites" ? "Sevimlilar" : "Kutubxonani kashf et"}</h2>
+            </div>
+            <div className="book-total"><span>{visibleBooks.length}</span> ta kitob</div>
+          </div>
+
+          <div className="toolbar">
+            <label className="search-box">
+              <span>⌕</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Kitob yoki muallifni qidiring..."
+              />
+            </label>
+            <div className="filter-wrap">
+              <span>Filtr:</span>
+              <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                {categories.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {visibleBooks.length ? (
+            <div className="book-grid">
+              {visibleBooks.map((book, index) => (
+                <article
+                  className="book-card"
+                  key={book.id}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <button className="cover-button" onClick={() => setReadingBook(book)}>
+                    <img src={book.cover} alt={`${book.title} muqovasi`} />
+                    <span className={`cover-category ${book.color}`}>{book.category}</span>
+                  </button>
+
                   <button
-                    key={day}
-                    className={`day ${selectedDay === index ? "selected" : ""}`}
-                    onClick={() => setSelectedDay(index)}
+                    className={`heart-button ${favorites.includes(book.id) ? "is-favorite" : ""} ${likedBook === book.id ? "heart-pop" : ""}`}
+                    onClick={() => toggleFavorite(book.id)}
                   >
-                    <small>{day}</small><b>{dateNumber(index)}</b>
-                    {tasks.some((task) => task.day === index) && <i />}
+                    {favorites.includes(book.id) ? "♥" : "♡"}
                   </button>
-                ))}
-              </div>
-              <div className="agenda-title">Tanlangan kun <span>{visibleTasks.length} ta vazifa</span></div>
-              {visibleTasks.slice(0, 3).map((task) => (
-                <div className="agenda-row" key={task.id}>
-                  <i /><span><b>{task.title}</b><small>{task.project}</small></span>
-                  <small className="agenda-time">{task.time}</small>
-                </div>
-              ))}
-            </article>
 
-            <article className="card panel" ref={habitsRef}>
-              <div className="panel-heading">
-                <div><h2>Odatlarim</h2><p>Har kuni davom et</p></div>
-                <span className="muted">{habits.filter((h) => h.done).length}/{habits.length}</span>
-              </div>
-              {habits.map((habit) => (
-                <div className="habit-row" key={habit.id}>
-                  <span className="habit-icon">{habit.icon}</span><b>{habit.name}</b>
-                  <button className={`habit-check ${habit.done ? "checked" : ""}`} onClick={() => toggleHabit(habit.id)}>
-                    {habit.done ? "✓" : ""}
+                  <button className="book-info" onClick={() => setReadingBook(book)}>
+                    <span className="book-author">{book.author}</span>
+                    <strong>{book.title}</strong>
+                    <span className="book-meta">
+                      <span>★ {book.rating}</span>
+                      <span>{book.year}</span>
+                    </span>
                   </button>
-                </div>
+                </article>
               ))}
-            </article>
-
-            <article className="card panel" ref={projectsRef}>
-              <div className="panel-heading">
-                <div><h2>Loyihalar</h2><p>Loyihalaringni boshqar</p></div>
-                <button className="add-project" onClick={addProject} aria-label="Loyiha qo‘shish">＋</button>
-              </div>
-              {projects.map((project, index) => (
-                <div className="project-row" key={project}>
-                  <i className={`project-dot ${["violet", "orange", "green"][index % 3]}`} />
-                  <span><b>{project}</b><small>Loyiha</small></span>
-                  <button className="delete-task" onClick={() => removeProject(project)} aria-label={`${project} loyihasini o‘chirish`}>×</button>
-                </div>
-              ))}
-            </article>
-          </section>
-          <footer>Yaxshi kunlar, yaxshi odatlardan boshlanadi. <span>♡</span></footer>
-        </div>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">♡</div>
+              <h3>{page === "favorites" ? "Sevimlilar hozircha bo‘sh" : "Kitob topilmadi"}</h3>
+              <p>Kitobni sevimlilarga qo‘shish uchun yurakchani bosing.</p>
+            </div>
+          )}
+        </section>
       </main>
 
-      {toast && <div className="toast">{toast}</div>}
+      {readingBook && (
+        <div className="modal-backdrop">
+          <section className="reader-modal" role="dialog" aria-modal="true">
+            <header className="reader-header">
+              <div>
+                <div className="eyebrow muted">KITOB O‘QISH</div>
+                <h2>{readingBook.title}</h2>
+                <span className="book-author">{readingBook.author}</span>
+              </div>
+              <div className="reader-actions">
+                <button onClick={startListening}>🔊 Tinglash</button>
+                <button onClick={() => speechSynthesis.cancel()}>⏹ To‘xtatish</button>
+                <button onClick={() => {
+                  speechSynthesis.cancel();
+                  setReadingBook(null);
+                }}>
+                  ✕ Yopish
+                </button>
+              </div>
+            </header>
+            <article className="reader-text">
+              {readingBook.text ? (
+                readingBook.text.split("\n").map((paragraph, index) =>
+                  paragraph.trim() ? <p key={index}>{paragraph}</p> : null,
+                )
+              ) : (
+                <>
+                  <p>{readingBook.description}</p>
+                  <p className="reader-empty">
+                    Bu kitobda to‘liq matn yo‘q. Admin panelidan matni bor kitob qo‘shing.
+                  </p>
+                </>
+              )}
+            </article>
+          </section>
+        </div>
+      )}
+
+      {adminOpen && (
+        <div className="modal-backdrop">
+          <form className="admin-modal" onSubmit={addBook}>
+            <button
+              type="button"
+              className="modal-close"
+              onClick={() => setAdminOpen(false)}
+            >
+              ×
+            </button>
+            <div className="eyebrow muted">ADMIN PANEL</div>
+            <h2>Kitob qo‘shish</h2>
+
+            <input
+              required
+              placeholder="Kitob nomi"
+              value={newBook.title}
+              onChange={(event) => setNewBook({ ...newBook, title: event.target.value })}
+            />
+            <input
+              required
+              placeholder="Muallif"
+              value={newBook.author}
+              onChange={(event) => setNewBook({ ...newBook, author: event.target.value })}
+            />
+            <select
+              value={newBook.category}
+              onChange={(event) => setNewBook({ ...newBook, category: event.target.value })}
+            >
+              {categories.slice(1).map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <input
+              placeholder="Muqova rasmi URL (ixtiyoriy)"
+              value={newBook.cover}
+              onChange={(event) => setNewBook({ ...newBook, cover: event.target.value })}
+            />
+            <textarea
+              required
+              placeholder="Kitob haqida qisqacha"
+              value={newBook.description}
+              onChange={(event) => setNewBook({ ...newBook, description: event.target.value })}
+            />
+            <textarea
+              required
+              className="book-text-input"
+              placeholder="Kitobning o‘qiladigan matnini kiriting"
+              value={newBook.text}
+              onChange={(event) => setNewBook({ ...newBook, text: event.target.value })}
+            />
+            <button className="auth-submit" type="submit">Kitobni saqlash</button>
+          </form>
+        </div>
+      )}
     </div>
   );
-}
-
-function dateNumber(index) {
-  const date = new Date();
-  date.setDate(date.getDate() - ((date.getDay() + 6) % 7) + index);
-  return date.getDate();
 }
